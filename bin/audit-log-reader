@@ -1,0 +1,60 @@
+#!/usr/bin/python
+
+import json
+import subprocess
+import sys
+import datetime
+import select
+
+REMOTE_FN = "/var/log/github/audit.log"
+
+
+def get_time(line):
+    f = "%Y %b %d %H:%M:%S"
+    d = datetime.datetime.strptime("%d " % datetime.datetime.now().year
+                                   + " ".join(line.split(" ")[:3]), f)
+    return d.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def pretty_print(l):
+    try:
+        offset = l.find("{")
+        if offset == -1:
+            return
+        j = json.loads(l[offset:])
+        action = j.get("action")
+        cmdline = j.get("cmdline")
+        program = j.get("program")
+        if action and action == "user.login":
+            p("%s login: %s", get_time(l), j["user"])
+        elif action and action == "repo.create":
+            p("%s create-repo %s %s", get_time(l), j['user'], j['repo'])
+        elif action and action == "staff.repo_route":
+            pass
+            #print "%s repo-route %s %s" % (get_time(l), j['actor'], j['repo'])
+        elif cmdline and program == "upload-pack":
+            p("%s pull: %s %s", get_time(l), j.get("pusher"), j.get('repo_name'))
+        elif program and program == "receive-pack":
+            p("%s push: %s %s", get_time(l), j.get("user_login"), j.get('repo_name'))
+    except KeyError:
+        print "failed to parse j: " + l
+
+
+def p(msg, *vargs):
+    print msg % vargs
+
+
+def tail_f(remote_github):
+    command = ['ssh', '-l', 'admin', remote_github, 'tail', '-f', REMOTE_FN]
+    print "Running %s" % " ".join(command)
+    f = subprocess.Popen(command, stdout=subprocess.PIPE)
+
+    out = f.stdout
+    try:
+        while select.select((out,), (), (out,)):
+            pretty_print(out.readline())
+    except KeyboardInterrupt:
+        print "Caught ctrl-c. Exiting."
+
+if __name__ == '__main__':
+    tail_f(sys.argv[1])

@@ -1,0 +1,19 @@
+#!/usr/bin/python
+
+import json
+import sys
+
+
+def pretty_print(line):
+    try:
+        j = json.loads(line)
+        print "%s %s %s" % (j['created_at'], j['class'], j.get("message"))
+    except ValueError:
+        # ignore
+        pass
+
+
+if __name__ == '__main__':
+    with open(sys.argv[1]) as f:
+        for line in f:
+            pretty_print(line)
